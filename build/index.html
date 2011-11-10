@@ -1,4 +1,4 @@
-<!DOCTYPE HTML>
+<!DOCTYPE html>
 <html lang="en">
 	<head>
 		<title>GLSL Sandbox</title>
@@ -13,7 +13,7 @@
 
 			}
 
-			#code {
+			#code, #code:hover {
 
 				position: absolute;
 				top: 80px;
@@ -21,15 +21,19 @@
 				width: 92%;
 				height: 90%;
 
-				color: #ffffff;
-				background-color: transparent;
+				color: rgba( 0, 255, 0, 1 );
 				border: none;
 				font-family: Monospace;
 				font-size: 14px;
 				font-weight: bold;
-				text-shadow: rgba( 0, 0, 0, 1 ) 0px 1px 2px;
+				text-shadow: rgba( 0, 0, 0, 1 ) 0px 1px 2px, rgba( 0, 255, 0, 0.6 ) 0px 0px 5px;
 
 				white-space: pre;
+
+				outline: 0; /* this removes browser-side outline */
+				overflow: auto;
+
+				-webkit-mask-image: -webkit-gradient( radial, center center, 800, center center, 1080, from( rgba( 0, 0, 0, 1 ) ), to( rgba( 0, 0, 0, 0 ) ) );
 
 			}
 
@@ -67,35 +71,101 @@
 
 			}
 
-			textarea:focus {
+			@-webkit-keyframes selected {
 
-				outline: 0; /* this removes browser-side outline */
+				from {
+					color: rgba( 255, 255, 255, 1 );
+					text-shadow: rgba( 0, 0, 0, 1 ) 0px 2px 2px, rgba( 0, 255, 0, 0.8 ) 0px 0px 10px;
+					-webkit-transform: scaleY(1.5);
+				}
+
+				to {
+					color: rgba( 0, 255, 0, 1 );
+					text-shadow: rgba( 0, 0, 0, 1 ) 0px 2px 2px, rgba( 0, 255, 0, 0.6 ) 0px 0px 5px;
+				}
+
+			}
+
+			@-webkit-keyframes compiled {
+
+				from {
+					color: rgba( 255, 255, 255, 1 );
+					text-shadow: rgba( 0, 0, 0, 1 ) 0px 1px 2px, rgba( 0, 255, 0, 1 ) 0px -0.08em 1px;
+					-webkit-transform: scaleY(5);
+				}
+
+				to {
+					color: rgba( 0, 255, 0, 1 );
+					text-shadow: rgba( 0, 0, 0, 1 ) 0px 1px 2px, rgba( 0, 255, 0, 0.6 ) 0px 0px 5px;
+				}
+
+			}
+
+			@-webkit-keyframes error {
+
+				from {
+					color: rgba( 255, 0, 0, 1 );
+					text-shadow: rgba( 0, 0, 0, 1 ) 0px 1px 2px, rgba( 255, 0, 0, 1 ) 0px -0.08em 1px;
+					-webkit-transform: scaleY(3);
+				}
+
+				to {
+					color: rgba( 0, 255, 0, 1 );
+					text-shadow: rgba( 0, 0, 0, 1 ) 0px 1px 2px, rgba( 0, 255, 0, 0.6 ) 0px 0px 5px;
+				}
+
+			}
+
+			#code div:empty {
+
+				height: 1em;
+
+			}
+
+			#code div.selected {
+
+				-webkit-animation-name: selected;
+				-webkit-animation-duration: 350ms;
+				-webkit-animation-timing-function: cubic-bezier(0.165, 0.840, 0.440, 1.000);
+				-webkit-animation-iteration-count: infinite;
+				-webkit-animation-direction: alternate;
+
+			}
+
+			#code.compiled div {
+
+				-webkit-animation-name: compiled;
+				-webkit-animation-duration: 800ms;
+				-webkit-animation-timing-function: cubic-bezier(0.230, 1.000, 0.320, 1.000);
+				-webkit-animation-iteration-count: 1;
+
+			}
+
+			#code.error div {
+
+				-webkit-animation-name: error;
+				-webkit-animation-duration: 800ms;
+				-webkit-animation-timing-function: cubic-bezier(0.230, 1.000, 0.320, 1.000);
+				-webkit-animation-iteration-count: 1;
 
 			}
 
 		</style>
 	</head>
 	<body>
-
 		<script>
 
-			if ( !window.requestAnimationFrame ) {
+			window.requestAnimationFrame =
+				window.requestAnimationFrame ||
+				window.webkitRequestAnimationFrame ||
+				window.mozRequestAnimationFrame ||
+				window.oRequestAnimationFrame ||
+				window.msRequestAnimationFrame ||
+				function ( callback, element ) {
 
-				window.requestAnimationFrame = ( function() {
+					window.setTimeout( callback, 1000 / 60 );
 
-					return window.webkitRequestAnimationFrame ||
-					window.mozRequestAnimationFrame ||
-					window.oRequestAnimationFrame ||
-					window.msRequestAnimationFrame ||
-					function ( callback, element ) {
-
-						window.setTimeout( callback, 1000 / 60 );
-
-					};
-
-				} )();
-
-			}
+				};
 
 			// Greetings to Iq/RGBA! ;)
 
@@ -113,11 +183,20 @@
 				canvas = document.createElement( 'canvas' );
 				effect.appendChild( canvas );
 
-				//
-
-				var code = document.createElement( 'textarea' );
+				var code = document.createElement( 'div' );
 				code.id = 'code';
+				code.contentEditable = 'true';
 				code.style.visibility = 'visible';
+				code.addEventListener( 'mousedown', function ( event ) {
+
+					resetLines();
+
+				}, false);
+				code.addEventListener( 'mouseup', function ( event ) {
+
+					updateLines();
+
+				}, false);
 				code.addEventListener( 'keydown', function ( event ) {
 
 					if ( event.keyCode == 9 ) {
@@ -125,40 +204,47 @@
 						// Fake TAB
 
 						event.preventDefault();
-
-						var start = code.selectionStart;
-						var end = code.selectionEnd;
-
-						code.value = code.value.substring( 0, start ) + '\t' + code.value.substring( end, code.value.length );
-
-						code.selectionStart = code.selectionEnd = start + 1;
-						code.focus();
+						document.execCommand( 'insertHTML', false, '\t' );
 
 					}
 
 				}, false );
 				code.addEventListener( 'keyup', function ( event ) {
 
-					if ( event.keyCode == 37 ) return;
-					if ( event.keyCode == 38 ) return;
-					if ( event.keyCode == 39 ) return;
-					if ( event.keyCode == 40 ) return;
+					updateLines();
+
+					if ( event.keyCode >= 16 && event.keyCode <= 45 ) return;
+					if ( event.keyCode >= 112 && event.keyCode <= 123 ) return;
 
 					compile();
 
 				}, false );
+				code.addEventListener( 'webkitAnimationEnd', function ( event ) {
+
+					if ( event.animationName == 'compiled' || event.animationName == 'error' ) {
+
+						code.classList.remove( event.animationName );
+
+					}
+
+				}, false);
 				document.body.appendChild( code );
 
 				if ( window.location.hash ) {
 
-					code.value = decodeURIComponent( window.location.hash.substr( 1 ) );
+					code.textContent = decodeURIComponent( window.location.hash.substr( 1 ) );
 
 				} else {
 
-					code.value = decodeURIComponent( '%23ifdef%20GL_ES%0Aprecision%20highp%20float%3B%0A%23endif%0A%0Auniform%20float%20time%3B%0Auniform%20vec2%20resolution%3B%0A%0Avoid%20main(%20void%20)%20%7B%0A%0A%09vec2%20position%20%3D%20gl_FragCoord.xy%20%2F%20resolution.xy%3B%0A%0A%09float%20color%20%3D%200.0%3B%0A%09color%20%2B%3D%20sin(%20position.x%20*%20cos(%20time%20%2F%2015.0%20)%20*%2080.0%20)%20%2B%20cos(%20position.y%20*%20cos(%20time%20%2F%2015.0%20)%20*%2010.0%20)%3B%0A%09color%20%2B%3D%20sin(%20position.y%20*%20sin(%20time%20%2F%2010.0%20)%20*%2040.0%20)%20%2B%20cos(%20position.x%20*%20sin(%20time%20%2F%2025.0%20)%20*%2040.0%20)%3B%0A%09color%20%2B%3D%20sin(%20position.x%20*%20sin(%20time%20%2F%205.0%20)%20*%2010.0%20)%20%2B%20sin(%20position.y%20*%20sin(%20time%20%2F%2035.0%20)%20*%2080.0%20)%3B%0A%09color%20*%3D%20sin(%20time%20%2F%2010.0%20)%20*%200.5%3B%0A%0A%09gl_FragColor%20%3D%20vec4(%20vec3(%20color%2C%20color%20*%200.5%2C%20sin(%20color%20%2B%20time%20%2F%203.0%20)%20*%200.75%20)%2C%201.0%20)%3B%0A%0A%7D' );
+					code.textContent = decodeURIComponent( '%23ifdef%20GL_ES%0Aprecision%20highp%20float%3B%0A%23endif%0A%0Auniform%20float%20time%3B%0Auniform%20vec2%20resolution%3B%0A%0Avoid%20main(%20void%20)%20%7B%0A%0A%09vec2%20position%20%3D%20gl_FragCoord.xy%20%2F%20resolution.xy%3B%0A%0A%09float%20color%20%3D%200.0%3B%0A%09color%20%2B%3D%20sin(%20position.x%20*%20cos(%20time%20%2F%2015.0%20)%20*%2080.0%20)%20%2B%20cos(%20position.y%20*%20cos(%20time%20%2F%2015.0%20)%20*%2010.0%20)%3B%0A%09color%20%2B%3D%20sin(%20position.y%20*%20sin(%20time%20%2F%2010.0%20)%20*%2040.0%20)%20%2B%20cos(%20position.x%20*%20sin(%20time%20%2F%2025.0%20)%20*%2040.0%20)%3B%0A%09color%20%2B%3D%20sin(%20position.x%20*%20sin(%20time%20%2F%205.0%20)%20*%2010.0%20)%20%2B%20sin(%20position.y%20*%20sin(%20time%20%2F%2035.0%20)%20*%2080.0%20)%3B%0A%09color%20*%3D%20sin(%20time%20%2F%2010.0%20)%20*%200.5%3B%0A%0A%09gl_FragColor%20%3D%20vec4(%20vec3(%20color%2C%20color%20*%200.5%2C%20sin(%20color%20%2B%20time%20%2F%203.0%20)%20*%200.75%20)%2C%201.0%20)%3B%0A%0A%7D' );
+
 				}
 
-				//
+				code.innerHTML = '<div>' + code.textContent.split( '\n' ).join( '</div><div>' ) + '</div>';
+
+				document.execCommand( 'styleWithCSS', false, 'true' );
+				code.focus();
+				updateLines();
 
 				var tools = document.createElement( 'div' );
 				tools.id = 'tools';
@@ -168,7 +254,7 @@
 				button.textContent = 'hide code';
 				button.addEventListener( 'click', function ( event ) {
 
-					if ( code.style.visibility == 'visible' ) {
+					if ( code.style.visibility === 'visible' ) {
 
 						button.textContent = 'show code';
 						code.style.visibility = 'hidden';
@@ -184,7 +270,6 @@
 
 				}, false );
 				tools.appendChild( button );
-
 
 				compileButton = document.createElement( 'button' );
 				compileButton.textContent = 'compile';
@@ -226,7 +311,16 @@
 			function compile() {
 
 				var program = gl.createProgram();
-				var fragment = document.getElementById( 'code' ).value;
+				var fragment = '';
+
+				var child = document.getElementById( 'code' ).firstElementChild;
+
+				while ( child ) {
+
+					fragment += child.textContent + '\n';
+					child = child.nextElementSibling;
+
+				}
 
 				var vs = createShader( 'attribute vec3 position; void main() { gl_Position = vec4( position, 1.0 ); }', gl.VERTEX_SHADER );
 				var fs = createShader( fragment, gl.FRAGMENT_SHADER );
@@ -242,6 +336,12 @@
 				gl.linkProgram( program );
 
 				if ( !gl.getProgramParameter( program, gl.LINK_STATUS ) ) {
+
+					if ( compileButton.textContent != 'compiled with errors' ) {
+
+						code.className = 'error';
+
+					}
 
 					console.error( 'VALIDATE_STATUS: ' + gl.getProgramParameter( program, gl.VALIDATE_STATUS ), 'ERROR: ' + gl.getError() );
 					compileButton.style.color = '#ff0000';
@@ -263,6 +363,8 @@
 				compileButton.style.color = '#00ff00';
 				compileButton.textContent = 'compiled succesfully';
 
+				code.className = 'compiled';
+
 			}
 
 			function createShader( src, type ) {
@@ -273,6 +375,12 @@
 				gl.compileShader( shader );
 
 				if ( !gl.getShaderParameter( shader, gl.COMPILE_STATUS ) ) {
+
+					if ( compileButton.textContent != 'compiled with errors' ) {
+
+						code.className = 'error';
+
+					}
 
 					console.error( gl.getShaderInfoLog( shader ) );
 
@@ -296,6 +404,43 @@
 				parameters.screenHeight = canvas.height;
 
 				gl.viewport( 0, 0, canvas.width, canvas.height );
+
+			}
+
+			function resetLines() {
+
+				var child = document.getElementById( 'code' ).firstElementChild;
+
+				while ( child ) {
+
+					child.className = '';
+					child = child.nextElementSibling;
+
+				}
+
+			}
+
+			function updateLines() {
+
+				var selection = window.getSelection();
+
+				var child = document.getElementById( 'code' ).firstElementChild;
+
+				while ( child ) {
+
+					if ( selection.containsNode( child, true ) ) {
+
+						child.className = 'selected';
+
+					} else {
+
+						child.className = '';
+
+					}
+
+					child = child.nextElementSibling;
+
+				}
 
 			}
 
